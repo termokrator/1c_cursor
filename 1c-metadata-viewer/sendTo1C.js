@@ -73,6 +73,16 @@ async function sendTo1C(outputChannel, commandConfig = { action: 'upload' }) {
   const logFile = path.join(taskDir, '1c_run.log');
   const runFile = path.join(taskDir, `${taskName}.ps1`);
 
+  const updateMarkerOnSuccess = async () => {
+    if (action !== 'upload') return;
+    try {
+      const now = new Date();
+      await fs.utimes(markerFile, now, now);
+    } catch (e) {
+      log(`Не удалось обновить маркер: ${e.message}`);
+    }
+  };
+
   // 1. Создаем папки, если их нет
   await fs.mkdir(compDir, { recursive: true });
   await fs.mkdir(taskDir, { recursive: true });
@@ -132,13 +142,7 @@ async function sendTo1C(outputChannel, commandConfig = { action: 'upload' }) {
       }
     }
 
-    // 5. Обновляем маркер времени, если есть новые файлы
-    if (changedFiles.length > 0) {
-      const now = new Date();
-      await fs.utimes(markerFile, now, now);
-    }
-
-    // 6. Обрабатываем новые пути
+    // 5. Обрабатываем новые пути
     for (const file of changedFiles) {
       allPaths.add(file);
       if (file.includes('/Ext/')) {
@@ -149,7 +153,7 @@ async function sendTo1C(outputChannel, commandConfig = { action: 'upload' }) {
       }
     }
 
-    // 7. Исключаем ConfigDumpInfo.xml и искусственные файлы распаковки обычных форм
+    // 6. Исключаем ConfigDumpInfo.xml и искусственные файлы распаковки обычных форм
     for (const p of Array.from(allPaths)) {
       const np = p.replace(/\\/g, '/');
       if (path.basename(p) === 'ConfigDumpInfo.xml') allPaths.delete(p);
@@ -192,7 +196,7 @@ async function sendTo1C(outputChannel, commandConfig = { action: 'upload' }) {
       return false;
     }
 
-    // 8. Создаем ZIP архив
+    // 7. Создаем ZIP архив
     log(`Архивируем файлы в ${zipFile}...`);
     const isWindows = process.platform === 'win32';
     const listFile = path.join(taskDir, 'files_to_zip.txt');
@@ -413,7 +417,7 @@ with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as zf:
             log(stdout);
             if (stderr) log(stderr);
             if (error) reject(error);
-            else resolve();
+            else updateMarkerOnSuccess().then(() => resolve(), reject);
           });
         });
         vscode.window.showInformationMessage(`Операция ${action} успешно выполнена в 1С!`);
@@ -462,6 +466,7 @@ with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as zf:
         }
         if (!runExists && !triggerExists) {
           resolved = true;
+          await updateMarkerOnSuccess();
           log('Удалённый режим: оба файла исчезли — операция успешна.');
           vscode.window.showInformationMessage(`Операция ${action} успешно выполнена в 1С!`);
           return true;
