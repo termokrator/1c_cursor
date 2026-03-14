@@ -1,0 +1,302 @@
+{
+  "name": "1c-metadata-viewer",
+  "displayName": "1С: Дерево метаданных",
+  "description": "Отображает структуру метаданных 1С в виде дерева по файлам конфигурации",
+  "version": "0.2.0",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onView:1cMetadata",
+    "onCommand:1cMetadata.refresh",
+    "onCommand:1cMetadata.refreshEntry",
+    "onCommand:1cMetadata.setSearchQuery",
+    "onCommand:1cMetadata.openSettings",
+    "onCommand:1cMetadata.sendTo1C",
+    "onCommand:1cMetadata.sendTo1CAndLaunchConfigurator",
+    "onCommand:1cMetadata.sendTo1CAndLaunchEnterprise",
+    "onCommand:1cMetadata.toggleCapturedFilterOn",
+    "onCommand:1cMetadata.toggleCapturedFilterOff",
+    "onCommand:1cMetadata.captureStorage",
+    "onCommand:1cMetadata.putToStorage",
+    "onCommand:1cMetadata.openObject",
+    "onCommand:1cMetadata.openFormProperties",
+    "onCommand:1cMetadata.openFormModule",
+    "onCommand:1cMetadata.openRequisiteProperties",
+    "onCommand:1cMetadata.openEnumValueProperties",
+    "onCommand:1cMetadata.openObjectModule",
+    "onCommand:1cMetadata.openManagerModule"
+  ],
+  "main": "./extension.js",
+  "scripts": {},
+  "contributes": {
+    "configuration": {
+      "title": "1С Метаданные",
+      "properties": {
+        "1cMetadata.workMode": {
+          "type": "string",
+          "enum": ["local", "remote"],
+          "enumDescriptions": ["Локальный", "Удаленный"],
+          "default": "local",
+          "description": "Режим работы расширения"
+        },
+        "1cMetadata.databaseType": {
+          "type": "string",
+          "enum": ["server", "file"],
+          "enumDescriptions": ["Серверная база", "Файловая база"],
+          "default": "file",
+          "description": "Тип базы 1С, связанной с текущим проектом"
+        },
+        "1cMetadata.server.server": {
+          "type": "string",
+          "default": "",
+          "description": "Адрес сервера 1С (например, localhost или 192.168.1.1). Используется при типе «Серверная база»"
+        },
+        "1cMetadata.server.database": {
+          "type": "string",
+          "default": "",
+          "description": "Имя информационной базы на сервере. Используется при типе «Серверная база»"
+        },
+        "1cMetadata.server.user": {
+          "type": "string",
+          "default": "",
+          "description": "Пользователь для подключения к серверной базе"
+        },
+        "1cMetadata.server.password": {
+          "type": "string",
+          "default": "",
+          "description": "Пароль для подключения к серверной базе"
+        },
+        "1cMetadata.file.path": {
+          "type": "string",
+          "default": "",
+          "description": "Путь к файловой базе 1С (папка с базой или путь к .1CD). Используется при типе «Файловая база»"
+        },
+        "1cMetadata.storage.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Подключена ли база к хранилищу конфигурации"
+        },
+        "1cMetadata.storage.path": {
+          "type": "string",
+          "default": "",
+          "description": "Путь к хранилищу конфигурации. Используется, если база подключена к хранилищу"
+        },
+        "1cMetadata.storage.user": {
+          "type": "string",
+          "default": "",
+          "description": "Пользователь хранилища конфигурации"
+        },
+        "1cMetadata.storage.password": {
+          "type": "string",
+          "default": "",
+          "description": "Пароль хранилища конфигурации"
+        },
+        "1cMetadata.disableStartupDialogs": {
+          "type": "boolean",
+          "default": false,
+          "description": "Скрывать окно выполнения команды 1С. Если флаг установлен, то окно платформы не будет отображаться при загрузке объектов, захвате объектов в хранилище и других команд платформы 1С"
+        }
+      }
+    },
+    "submenus": [
+      {
+        "id": "1cMetadata.sendSubmenu",
+        "label": "Отправить",
+        "icon": "$(cloud-upload)"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "1cMetadata",
+          "name": "1С Метаданные"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "1cMetadata.setSearchQuery",
+        "title": "Поиск по дереву метаданных",
+        "icon": "$(search)"
+      },
+      {
+        "command": "1cMetadata.refresh",
+        "title": "Обновить дерево метаданных",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "1cMetadata.openSettings",
+        "title": "Настройки",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "1cMetadata.sendTo1C",
+        "title": "Отправить в 1С",
+        "icon": "$(cloud-upload)",
+        "enablement": "!1cMetadata.sendTo1CInProgress"
+      },
+      {
+        "command": "1cMetadata.sendTo1CAndLaunchConfigurator",
+        "title": "Отправить в 1С и запустить конфигуратор",
+        "icon": "$(debug-start)",
+        "enablement": "!1cMetadata.sendTo1CInProgress"
+      },
+      {
+        "command": "1cMetadata.sendTo1CAndLaunchEnterprise",
+        "title": "Отправить в 1С и запустить предприятие",
+        "icon": "$(play)",
+        "enablement": "!1cMetadata.sendTo1CInProgress"
+      },
+      {
+        "command": "1cMetadata.toggleCapturedFilterOn",
+        "title": "Показать только захваченные объекты",
+        "icon": "$(list-filter)"
+      },
+      {
+        "command": "1cMetadata.toggleCapturedFilterOff",
+        "title": "Показать все объекты",
+        "icon": "$(list-flat)"
+      },
+      {
+        "command": "1cMetadata.captureStorage",
+        "title": "Захватить в хранилище",
+        "icon": "$(lock)"
+      },
+      {
+        "command": "1cMetadata.putToStorage",
+        "title": "Поместить в хранилище",
+        "icon": "$(check)"
+      },
+      {
+        "command": "1cMetadata.openObject",
+        "title": "Открыть объект",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "1cMetadata.openFormProperties",
+        "title": "Свойства"
+      },
+      {
+        "command": "1cMetadata.openRequisiteProperties",
+        "title": "Свойства реквизита"
+      },
+      {
+        "command": "1cMetadata.openEnumValueProperties",
+        "title": "Свойства значения перечисления"
+      },
+      {
+        "command": "1cMetadata.openFormModule",
+        "title": "Открыть модуль",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "1cMetadata.openObjectModule",
+        "title": "Открыть модуль",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "1cMetadata.openManagerModule",
+        "title": "Открыть модуль менеджера",
+        "icon": "$(file-code)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "1cMetadata.setSearchQuery",
+          "when": "view == 1cMetadata",
+          "group": "navigation@1"
+        },
+        {
+          "submenu": "1cMetadata.sendSubmenu",
+          "when": "view == 1cMetadata",
+          "group": "navigation@2"
+        },
+        {
+          "command": "1cMetadata.toggleCapturedFilterOff",
+          "when": "view == 1cMetadata && config.1cMetadata.storage.enabled && 1cMetadata:capturedOnlyFilter",
+          "group": "navigation@2"
+        },
+        {
+          "command": "1cMetadata.toggleCapturedFilterOn",
+          "when": "view == 1cMetadata && config.1cMetadata.storage.enabled && !1cMetadata:capturedOnlyFilter",
+          "group": "navigation@2"
+        },
+        {
+          "command": "1cMetadata.refresh",
+          "when": "view == 1cMetadata",
+          "group": "navigation@3"
+        },
+        {
+          "command": "1cMetadata.openSettings",
+          "when": "view == 1cMetadata",
+          "group": "navigation@4"
+        }
+      ],
+      "1cMetadata.sendSubmenu": [
+        {
+          "command": "1cMetadata.sendTo1C",
+          "when": "view == 1cMetadata"
+        },
+        {
+          "command": "1cMetadata.sendTo1CAndLaunchConfigurator",
+          "when": "view == 1cMetadata"
+        },
+        {
+          "command": "1cMetadata.sendTo1CAndLaunchEnterprise",
+          "when": "view == 1cMetadata"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "1cMetadata.openObject",
+          "when": "view == 1cMetadata && (viewItem == metadataObject || viewItem == constantObject || viewItem == enumObject)",
+          "group": "1cOpen@1"
+        },
+        {
+          "command": "1cMetadata.openFormProperties",
+          "when": "view == 1cMetadata && viewItem == formFolder",
+          "group": "1cOpen@2"
+        },
+        {
+          "command": "1cMetadata.openFormModule",
+          "when": "view == 1cMetadata && viewItem == formFolder",
+          "group": "1cOpen@3"
+        },
+        {
+          "command": "1cMetadata.openObjectModule",
+          "when": "view == 1cMetadata && viewItem == metadataObject",
+          "group": "1cOpen@2"
+        },
+        {
+          "command": "1cMetadata.openManagerModule",
+          "when": "view == 1cMetadata && viewItem == metadataObject",
+          "group": "1cOpen@3"
+        },
+        {
+          "command": "1cMetadata.openRequisiteProperties",
+          "when": "view == 1cMetadata && (viewItem == attrItem || viewItem == dimensionOrResourceItem)",
+          "group": "1cOpen@1"
+        },
+        {
+          "command": "1cMetadata.openEnumValueProperties",
+          "when": "view == 1cMetadata && viewItem == enumValueItem",
+          "group": "1cOpen@1"
+        },
+        {
+          "command": "1cMetadata.captureStorage",
+          "when": "view == 1cMetadata && config.1cMetadata.storage.enabled && (viewItem == metadataObject || viewItem == formFolder)",
+          "group": "1cStorage@1"
+        },
+        {
+          "command": "1cMetadata.putToStorage",
+          "when": "view == 1cMetadata && config.1cMetadata.storage.enabled && (viewItem == metadataObject || viewItem == formFolder)",
+          "group": "1cStorage@2"
+        }
+      ]
+    }
+  }
+}
