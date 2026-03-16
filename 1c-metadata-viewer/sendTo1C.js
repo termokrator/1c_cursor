@@ -19,10 +19,11 @@ async function findChangedFiles(dir, markerTime, basePath = '') {
     if (entry.isDirectory()) {
       results = results.concat(await findChangedFiles(fullPath, markerTime, relativePath));
     } else if (entry.isFile()) {
-      if (entry.name.endsWith('.xml') || entry.name.endsWith('.bsl') || entry.name.endsWith('.mxl') || entry.name.endsWith('.bin')) {
+      if (entry.name.endsWith('.xml') || entry.name.endsWith('.bsl') || entry.name.endsWith('.mxl') || entry.name.endsWith('.bin') || entry.name.endsWith('.txt')) {
         // Пропускаем только искусственные файлы обычной формы (Form.bin существует)
         const normalizedPath = fullPath.replace(/\\/g, '/');
         if (entry.name === 'Form.txt' && normalizedPath.includes('/Ext/Form.txt')) continue;
+        // Template.txt — содержимое макета, включаем. Form.txt — распакованная форма, исключаем выше
         if (entry.name === 'Module.bsl' && normalizedPath.includes('/Ext/Form/Module.bsl')) {
           const extDir = path.dirname(path.dirname(fullPath));
           if (fsSync.existsSync(path.join(extDir, 'Form.bin'))) continue; // обычная форма
@@ -179,6 +180,10 @@ async function sendTo1C(outputChannel, commandConfig = { action: 'upload' }) {
     }
 
     log(`Найдено файлов для отправки: ${uniquePaths.length}`);
+
+    // 6.5. Добавляем UTF-8 BOM в Template.txt/Form.txt — 1С без BOM читает как CP1251
+    const { ensureUtf8BomFor1C } = require('./encodingNormalizer');
+    ensureUtf8BomFor1C(rootPath, uniquePaths);
 
     if (uniquePaths.length === 0) {
       const msg = storageEnabled

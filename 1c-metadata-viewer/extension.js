@@ -521,7 +521,7 @@ class MetadataTreeProvider {
         result = await this.buildExtChildren(rootPath, item.basePath);
       } else if (item.contextValue === 'templatesFolder') {
         logMsg = `Templates Folder: ${path.basename(item.basePath)}`;
-        result = await this.buildTemplatesChildren(rootPath, item.basePath);
+        result = await this.buildTemplatesChildren(rootPath, item.basePath, item.folderName || item.parentFolderName, item.objectName);
       } else if (item.contextValue === 'templateFolder') {
         logMsg = `Template: ${path.basename(item.basePath)}`;
         result = await this.buildTemplateChildren(rootPath, item.basePath);
@@ -1495,12 +1495,19 @@ class MetadataTreeProvider {
     return descriptors.map(descriptor => this._createItemFromDescriptor(descriptor));
   }
 
-  async buildTemplatesChildren(rootPath, templatesPath) {
+  async buildTemplatesChildren(rootPath, templatesPath, folderName, objectName) {
     await this._ensureCacheLoaded(rootPath);
     const cacheKey = `templates:${path.relative(rootPath, templatesPath)}`;
-    const cachedChildren = this._restoreChildrenFromCache(cacheKey);
-    if (cachedChildren) {
-      return cachedChildren;
+    this._ensureCacheShape();
+    const cached = this._memCache.children[cacheKey];
+    if (Array.isArray(cached) && cached.length > 0) {
+      const enriched = cached.map(d => {
+        if (d.contextValue === 'templateFolder' && (folderName || objectName)) {
+          return { ...d, folderName: d.folderName || folderName, objectName: d.objectName || objectName };
+        }
+        return d;
+      });
+      return enriched.map(descriptor => this._createItemFromDescriptor(descriptor));
     }
 
     const entries = await this._safeReaddir(rootPath, templatesPath);
@@ -1517,7 +1524,9 @@ class MetadataTreeProvider {
           label: e.name,
           contextValue: 'templateFolder',
           basePath: path.join(templatesPath, e.name),
-          icon: 'file-media'
+          icon: 'file-media',
+          folderName,
+          objectName
         }));
       } else if (e.isFile() && e.name.endsWith('.xml')) {
         descriptors.push(this._fileDescriptor(e.name, path.join(templatesPath, e.name)));
@@ -1569,6 +1578,8 @@ async function activate(context) {
       if (workspaceRoot) {
         const formUnpacker = require('./formUnpacker');
         await formUnpacker.unpackAllForms(workspaceRoot);
+        const encodingNormalizer = require('./encodingNormalizer');
+        await encodingNormalizer.normalizeEncodingToUtf8(workspaceRoot);
       }
       treeProvider.forceRefresh();
     })

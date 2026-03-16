@@ -106,6 +106,20 @@ class StorageStateManager {
           }
         }
       }
+      // Миграция: для рекурсивно захваченных объектов добавляем недостающие формы, макеты и команды
+      let migrated = false;
+      for (const [fullName, capture] of Object.entries(this.capturedObjects)) {
+        if (capture.recursive && fullName.split('.').length === 2) {
+          const children = await discoverIndependentChildren(this.rootPath, fullName);
+          for (const child of children) {
+            if (!this.capturedObjects[child.fullName]) {
+              this.capturedObjects[child.fullName] = { recursive: false };
+              migrated = true;
+            }
+          }
+        }
+      }
+      if (migrated) await this.save();
     } catch (e) {
       this.capturedObjects = {};
     }
@@ -170,9 +184,21 @@ class StorageStateManager {
         continue;
       }
       const existing = this.capturedObjects[obj.fullName];
-      if (!existing || existing.recursive !== obj.recursive) {
-        this.capturedObjects[obj.fullName] = { recursive: !!obj.recursive };
+      const recursive = !!obj.recursive;
+      if (!existing || existing.recursive !== recursive) {
+        this.capturedObjects[obj.fullName] = { recursive };
         changed = true;
+      }
+      // При рекурсивном захвате явно добавляем формы, макеты и команды,
+      // чтобы они корректно отображались в фильтре «Только захваченные»
+      if (recursive && this.rootPath) {
+        const children = await discoverIndependentChildren(this.rootPath, obj.fullName);
+        for (const child of children) {
+          if (!this.capturedObjects[child.fullName]) {
+            this.capturedObjects[child.fullName] = { recursive: false };
+            changed = true;
+          }
+        }
       }
     }
     if (changed) {
