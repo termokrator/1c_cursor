@@ -8,6 +8,7 @@ const METADATA_PREFIXES = {
   'Constants': 'Константа',
   'DataProcessors': 'Обработка',
   'Documents': 'Документ',
+  'DocumentJournals': 'ЖурналДокументов',
   'Enums': 'Перечисление',
   'FilterCriteria': 'КритерийОтбора',
   'Languages': 'Язык',

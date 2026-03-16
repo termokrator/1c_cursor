@@ -19,7 +19,7 @@ async function discoverIndependentChildren(rootPath, fullName) {
 
   let meta = { forms: [], templates: [], commands: [] };
   try {
-    if (folder === 'Catalogs' || folder === 'Documents') {
+    if (folder === 'Catalogs' || folder === 'Documents' || folder === 'DocumentJournals') {
       meta = await parseMetadataForTree(xmlPath);
     } else if (folder === 'Enums') {
       meta = await parseEnumForTree(xmlPath);

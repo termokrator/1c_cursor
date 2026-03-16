@@ -310,7 +310,7 @@ with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as zf:
 
   let cmdAction = '';
   if (action === 'upload') {
-    cmdAction = `/LoadConfigFromFiles \`"$ProjectRoot\`" -files \`"$absoluteFilesToLoad\`" /UpdateDBCfg`;
+    cmdAction = `/LoadConfigFromFiles \`"$ProjectRoot\`" -files \`"$absoluteFilesToLoad\`" -NoCheck /UpdateDBCfg`;
   } else if (action === 'lock') {
     cmdAction = `/ConfigurationRepositoryLock -Objects \`"$triggerFile\`"`;
   } else if (action === 'commit') {
