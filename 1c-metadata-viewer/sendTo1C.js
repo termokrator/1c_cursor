@@ -92,8 +92,6 @@ async function sendTo1C(outputChannel, commandConfig = { action: 'upload' }) {
   const workMode = config.get('workMode');
   const storageEnabled = config.get('storage.enabled');
 
-  let relativeFilesToLoad = ''; // For upload
-
   if (action === 'upload') {
     // 2. Проверка маркера
     let markerTime = 0;
@@ -116,7 +114,7 @@ async function sendTo1C(outputChannel, commandConfig = { action: 'upload' }) {
     // 4. Читаем уже существующие пути из trigger-файла
     try {
       const oldContent = await fs.readFile(triggerFile, 'utf8');
-      let oldPaths = oldContent.replace(/\\/g, '/').split(',').map((p) => p.trim()).filter(Boolean);
+      let oldPaths = oldContent.replace(/\\/g, '/').split(/[,\r\n]+/).map((p) => p.trim()).filter(Boolean);
       if (storageEnabled && oldPaths.length > 0) {
         const stateManager = require('./stateManager');
         const { getFullNameFromFsPath } = require('./fullNameHelper');
@@ -142,15 +140,9 @@ async function sendTo1C(outputChannel, commandConfig = { action: 'upload' }) {
       }
     }
 
-    // 5. Обрабатываем новые пути
+    // 5. Обрабатываем новые пути — добавляем только реально изменённые файлы, без родительского XML
     for (const file of changedFiles) {
       allPaths.add(file);
-      if (file.includes('/Ext/')) {
-        const parentXml = file.replace(/\/Ext\/[^/]+(\.bsl|\.mxl|\.bin)$/, '.xml');
-        if (parentXml !== file) {
-          allPaths.add(parentXml);
-        }
-      }
     }
 
     // 6. Исключаем ConfigDumpInfo.xml и искусственные файлы распаковки обычных форм
@@ -253,10 +245,9 @@ with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as zf:
     }
 
     const winPaths = uniquePaths.map(p => p.replace(/\//g, '\\'));
-    const triggerContent = winPaths.join(',');
+    const triggerContent = winPaths.join('\n');
     log(`Сохраняем триггер файл: ${triggerFile}`);
     await fs.writeFile(triggerFile, triggerContent, 'utf8');
-    relativeFilesToLoad = winPaths.join(',');
     log('✅ Очередь обновлена! Файлы запакованы.');
 
   } else if (action === 'lock' || action === 'commit') {
@@ -310,7 +301,7 @@ with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as zf:
 
   let cmdAction = '';
   if (action === 'upload') {
-    cmdAction = `/LoadConfigFromFiles \`"$ProjectRoot\`" -files \`"$absoluteFilesToLoad\`" -NoCheck /UpdateDBCfg`;
+    cmdAction = `/LoadConfigFromFiles \`"$ProjectRoot\`" -listFile \`"$triggerFile\`" -NoCheck /UpdateDBCfg`;
   } else if (action === 'lock') {
     cmdAction = `/ConfigurationRepositoryLock -Objects \`"$triggerFile\`"`;
   } else if (action === 'commit') {
@@ -327,18 +318,12 @@ with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as zf:
       $TaskDir = $PSScriptRoot
       $CompDir = Split-Path -LiteralPath $TaskDir
       $ProjectRoot = Split-Path -LiteralPath $CompDir
+      $triggerFile = Join-Path $TaskDir '${taskName}'
 
       $v8exe = '${v8exe.replace(/'/g, "''")}'
-      
-      ${action === 'upload' ? `
-      $relFiles = '${relativeFilesToLoad.replace(/'/g, "''")}'
-      $filesArray = $relFiles -split ',' | ForEach-Object { Join-Path $ProjectRoot $_.Replace('/', '\\') }
-      $absoluteFilesToLoad = $filesArray -join ','
-      ` : ''}
 
       $resultFile = Join-Path $TaskDir '1c_result.txt'
       $logFile = Join-Path $TaskDir '1c_run.log'
-      $triggerFile = Join-Path $TaskDir '${taskName}'
       $zipFile = Join-Path $TaskDir 'task.uploadTo1c.zip'
       $runFile = Join-Path $TaskDir '${taskName}.ps1'
 
