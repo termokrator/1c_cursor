@@ -1674,6 +1674,48 @@ async function activate(context) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('1cMetadata.releaseStorage', async (treeItem) => {
+      if (!treeItem) return;
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) return;
+      const { openStorageActionWebview } = require('./storageActionWebview');
+      const { getFullName } = require('./fullNameHelper');
+      const stateManager = require('./stateManager');
+      if (!stateManager.rootPath) await stateManager.init(workspaceRoot);
+      else await stateManager.load();
+      const fullName = getFullName(treeItem);
+      
+      if (!fullName) {
+        vscode.window.showErrorMessage('Не удалось определить полное имя объекта для хранилища.');
+        return;
+      }
+
+      if (!stateManager.isCaptured(fullName)) {
+        vscode.window.showInformationMessage('Объект не захвачен в хранилище.');
+        return;
+      }
+
+      const captured = stateManager.getAllCaptured();
+      const capture = captured[fullName];
+      const defaultRecursive = capture?.recursive ?? false;
+
+      openStorageActionWebview(context, 'unlock', treeItem, async (data) => {
+        const { sendTo1C } = require('./sendTo1C');
+        const success = await sendTo1C(treeProvider._outputChannel, {
+          action: 'unlock',
+          targetObjects: [{ fullName, includeChildObjects: data.recursive }]
+        });
+
+        if (success) {
+          await stateManager.removeCaptured([{ fullName, recursive: data.recursive }]);
+          await treeProvider.softRefresh();
+          storageDecorationProvider.refresh();
+        }
+      }, { defaultRecursive });
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('1cMetadata.openObject', async (treeItem) => {
       if (!treeItem) return;
       if (treeItem.contextValue === 'metadataObject') {

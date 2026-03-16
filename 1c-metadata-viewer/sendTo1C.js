@@ -64,7 +64,8 @@ async function sendTo1C(outputChannel, commandConfig = { action: 'upload' }) {
   
   const action = commandConfig.action || 'upload';
   const taskName = action === 'lock' ? 'task.storageLock' :
-                   action === 'commit' ? 'task.storageCommit' : 'task.uploadTo1c';
+                   action === 'commit' ? 'task.storageCommit' :
+                   action === 'unlock' ? 'task.storageUnlock' : 'task.uploadTo1c';
                    
   const taskDir = path.join(compDir, taskName);
   const markerFile = path.join(taskDir, '.last_1c_sync');
@@ -255,7 +256,7 @@ with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as zf:
     await fs.writeFile(triggerFile, triggerContent, 'utf8');
     log('✅ Очередь обновлена! Файлы запакованы.');
 
-  } else if (action === 'lock' || action === 'commit') {
+  } else if (action === 'lock' || action === 'commit' || action === 'unlock') {
     log(`Формируем XML файл для операции ${action}...`);
     let xmlContent = `<?xml version="1.0" encoding="UTF-8"?>\n<Objects xmlns="http://v8.1c.ru/8.3/config/objects" version="1.0">\n`;
     for (const obj of (commandConfig.targetObjects || [])) {
@@ -309,6 +310,8 @@ with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as zf:
     cmdAction = `/LoadConfigFromFiles \`"$ProjectRoot\`" -listFile \`"$triggerFile\`" -NoCheck /UpdateDBCfg`;
   } else if (action === 'lock') {
     cmdAction = `/ConfigurationRepositoryLock -Objects \`"$triggerFile\`"`;
+  } else if (action === 'unlock') {
+    cmdAction = `/ConfigurationRepositoryUnLock -Objects \`"$triggerFile\`" -force`;
   } else if (action === 'commit') {
     cmdAction = `/ConfigurationRepositoryCommit -Objects \`"$triggerFile\`"`;
     if (commandConfig.commitComment) {

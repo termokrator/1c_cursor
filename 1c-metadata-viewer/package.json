@@ -21,6 +21,7 @@
     "onCommand:1cMetadata.toggleCapturedFilterOff",
     "onCommand:1cMetadata.captureStorage",
     "onCommand:1cMetadata.putToStorage",
+    "onCommand:1cMetadata.releaseStorage",
     "onCommand:1cMetadata.openObject",
     "onCommand:1cMetadata.openFormProperties",
     "onCommand:1cMetadata.openFormModule",
@@ -171,6 +172,11 @@
         "icon": "$(check)"
       },
       {
+        "command": "1cMetadata.releaseStorage",
+        "title": "Отменить захват в хранилище",
+        "icon": "$(unlock)"
+      },
+      {
         "command": "1cMetadata.openObject",
         "title": "Открыть объект",
         "icon": "$(go-to-file)"
@@ -295,6 +301,11 @@
           "command": "1cMetadata.putToStorage",
           "when": "view == 1cMetadata && config.1cMetadata.storage.enabled && (viewItem == metadataObject || viewItem == formFolder || viewItem == templateFolder)",
           "group": "1cStorage@2"
+        },
+        {
+          "command": "1cMetadata.releaseStorage",
+          "when": "view == 1cMetadata && config.1cMetadata.storage.enabled && (viewItem == metadataObject || viewItem == formFolder || viewItem == templateFolder)",
+          "group": "1cStorage@3"
         }
       ]
     }

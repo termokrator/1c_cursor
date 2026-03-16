@@ -189,9 +189,10 @@ class StorageStateManager {
         this.capturedObjects[obj.fullName] = { recursive };
         changed = true;
       }
-      // При рекурсивном захвате явно добавляем формы, макеты и команды,
-      // чтобы они корректно отображались в фильтре «Только захваченные»
-      if (recursive && this.rootPath) {
+      // При рекурсивном захвате добавляем дочерние объекты только для верхнеуровневых объектов
+      // (Справочник.БлокиПитания). Для формы/макета/команды recursive не имеет смысла — у них нет «детей»
+      const parts = obj.fullName.split('.');
+      if (recursive && this.rootPath && parts.length === 2) {
         const children = await discoverIndependentChildren(this.rootPath, obj.fullName);
         for (const child of children) {
           if (!this.capturedObjects[child.fullName]) {
