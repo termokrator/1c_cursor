@@ -12,6 +12,18 @@ const { getFullName, getFolderNameFromFullName } = require('./fullNameHelper');
 
 const CACHE_FILENAME = '.vscode/1c-metadata-cache.json';
 
+// Лимит VS Code: файлы > 50MB не синхронизируются с расширениями (openTextDocument)
+const FILE_SIZE_LIMIT_BYTES = 50 * 1024 * 1024;
+
+async function isFileExcludedBySize(filePath) {
+  try {
+    const stat = await fs.stat(filePath);
+    return stat.size > FILE_SIZE_LIMIT_BYTES;
+  } catch {
+    return false;
+  }
+}
+
 const METADATA_NAMES = {
   'AccumulationRegisters': 'Регистры накопления',
   'Catalogs': 'Справочники',
@@ -1169,7 +1181,7 @@ class MetadataTreeProvider {
     const entries = await this._safeReaddir(rootPath, basePath);
     if (entries.length === 0) {
       const xmlPath = basePath + '.xml';
-      if (await this._safeAccess(rootPath, xmlPath)) {
+      if (await this._safeAccess(rootPath, xmlPath) && !(await isFileExcludedBySize(xmlPath))) {
         descriptors.push(this._fileDescriptor(objectName + '.xml', xmlPath));
       }
       this._storeChildrenInCache(rootPath, cacheKey, descriptors);
@@ -1187,7 +1199,7 @@ class MetadataTreeProvider {
       this._safeAccess(rootPath, templatesPath)
     ]);
 
-    if (hasXml) {
+    if (hasXml && !(await isFileExcludedBySize(xmlPath))) {
       descriptors.push(this._fileDescriptor(objectName + '.xml', xmlPath));
     }
     if (hasExt) {
@@ -1308,7 +1320,7 @@ class MetadataTreeProvider {
 
     for (const e of entries) {
       const fullPath = path.join(extPath, e.name);
-      if (e.isFile()) {
+      if (e.isFile() && !(await isFileExcludedBySize(fullPath))) {
         descriptors.push(this._fileDescriptor(e.name, fullPath, getFileIcon(e.name)));
       }
     }
@@ -1376,7 +1388,10 @@ class MetadataTreeProvider {
           objectName: objName
         }));
       } else if (e.isFile() && e.name.endsWith('.xml')) {
-        descriptors.push(this._fileDescriptor(e.name, path.join(formsPath, e.name)));
+        const fullPath = path.join(formsPath, e.name);
+        if (!(await isFileExcludedBySize(fullPath))) {
+          descriptors.push(this._fileDescriptor(e.name, fullPath));
+        }
       }
     }
 
@@ -1407,7 +1422,7 @@ class MetadataTreeProvider {
       this._safeReaddir(rootPath, extPath)
     ]);
 
-    if (hasXml) {
+    if (hasXml && !(await isFileExcludedBySize(xmlPath))) {
       descriptors.push(this._fileDescriptor(path.basename(formPath) + '.xml', xmlPath));
     }
 
@@ -1422,18 +1437,23 @@ class MetadataTreeProvider {
     for (const e of entries) {
       if (e.isFile()) {
         const fullPath = path.join(extPath, e.name);
-        descriptors.push(this._fileDescriptor(e.name, fullPath, getFileIcon(e.name)));
+        if (!(await isFileExcludedBySize(fullPath))) {
+          descriptors.push(this._fileDescriptor(e.name, fullPath, getFileIcon(e.name)));
+        }
       }
     }
 
     for (const subdir of subdirectoryEntries) {
       for (const entry of subdir.entries) {
         if (entry.isFile()) {
-          descriptors.push(this._fileDescriptor(
-            subdir.folderName + '/' + entry.name,
-            path.join(subdir.subPath, entry.name),
-            getFileIcon(entry.name)
-          ));
+          const fullPath = path.join(subdir.subPath, entry.name);
+          if (!(await isFileExcludedBySize(fullPath))) {
+            descriptors.push(this._fileDescriptor(
+              subdir.folderName + '/' + entry.name,
+              fullPath,
+              getFileIcon(entry.name)
+            ));
+          }
         }
       }
     }
@@ -1460,7 +1480,7 @@ class MetadataTreeProvider {
       this._safeReaddir(rootPath, extPath)
     ]);
 
-    if (hasXml) {
+    if (hasXml && !(await isFileExcludedBySize(xmlPath))) {
       descriptors.push(this._fileDescriptor(templateName + '.xml', xmlPath));
     }
 
@@ -1475,18 +1495,23 @@ class MetadataTreeProvider {
     for (const e of entries) {
       if (e.isFile()) {
         const fullPath = path.join(extPath, e.name);
-        descriptors.push(this._fileDescriptor(e.name, fullPath, getFileIcon(e.name)));
+        if (!(await isFileExcludedBySize(fullPath))) {
+          descriptors.push(this._fileDescriptor(e.name, fullPath, getFileIcon(e.name)));
+        }
       }
     }
 
     for (const subdir of subdirectoryEntries) {
       for (const entry of subdir.entries) {
         if (entry.isFile()) {
-          descriptors.push(this._fileDescriptor(
-            subdir.folderName + '/' + entry.name,
-            path.join(subdir.subPath, entry.name),
-            getFileIcon(entry.name)
-          ));
+          const fullPath = path.join(subdir.subPath, entry.name);
+          if (!(await isFileExcludedBySize(fullPath))) {
+            descriptors.push(this._fileDescriptor(
+              subdir.folderName + '/' + entry.name,
+              fullPath,
+              getFileIcon(entry.name)
+            ));
+          }
         }
       }
     }
@@ -1529,7 +1554,10 @@ class MetadataTreeProvider {
           objectName
         }));
       } else if (e.isFile() && e.name.endsWith('.xml')) {
-        descriptors.push(this._fileDescriptor(e.name, path.join(templatesPath, e.name)));
+        const fullPath = path.join(templatesPath, e.name);
+        if (!(await isFileExcludedBySize(fullPath))) {
+          descriptors.push(this._fileDescriptor(e.name, fullPath));
+        }
       }
     }
 
@@ -1768,6 +1796,10 @@ async function activate(context) {
       const rootPath = workspaceFolders[0].uri.fsPath;
       try {
         await fs.access(formModulePath);
+        if (await isFileExcludedBySize(formModulePath)) {
+          vscode.window.showErrorMessage(`Файл превышает 50 МБ и не может быть открыт: ${path.basename(formModulePath)}`);
+          return;
+        }
         const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(formModulePath));
         await vscode.window.showTextDocument(doc);
       } catch {
@@ -1791,6 +1823,10 @@ async function activate(context) {
       const objectModulePath = path.join(treeItem.basePath, 'Ext', 'ObjectModule.bsl');
       try {
         await fs.access(objectModulePath);
+        if (await isFileExcludedBySize(objectModulePath)) {
+          vscode.window.showErrorMessage(`Файл превышает 50 МБ и не может быть открыт: ${path.basename(objectModulePath)}`);
+          return;
+        }
         const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(objectModulePath));
         await vscode.window.showTextDocument(doc);
       } catch {
@@ -1814,6 +1850,10 @@ async function activate(context) {
       const managerModulePath = path.join(treeItem.basePath, 'Ext', 'ManagerModule.bsl');
       try {
         await fs.access(managerModulePath);
+        if (await isFileExcludedBySize(managerModulePath)) {
+          vscode.window.showErrorMessage(`Файл превышает 50 МБ и не может быть открыт: ${path.basename(managerModulePath)}`);
+          return;
+        }
         const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(managerModulePath));
         await vscode.window.showTextDocument(doc);
       } catch {

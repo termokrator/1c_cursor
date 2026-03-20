@@ -3,6 +3,15 @@
  */
 const fs = require('fs').promises;
 
+const FILE_SIZE_LIMIT_BYTES = 50 * 1024 * 1024;
+
+async function checkFileSize(xmlPath) {
+  const stat = await fs.stat(xmlPath);
+  if (stat.size > FILE_SIZE_LIMIT_BYTES) {
+    throw new Error(`Файл превышает 50 МБ (${xmlPath})`);
+  }
+}
+
 const NS = {
   v8: 'http://v8.1c.ru/8.1/data/core',
   xr: 'http://v8.1c.ru/8.3/xcf/readable'
@@ -71,7 +80,7 @@ function extractSimpleProperties(xmlStr, propertiesBlock) {
     'CodeType', 'CodeAllowedLength', 'CodeSeries', 'CheckUnique', 'Autonumbering',
     'DefaultPresentation', 'PredefinedDataUpdate', 'EditType', 'QuickChoice', 'ChoiceMode',
     'DefaultObjectForm', 'DefaultFolderForm', 'DefaultListForm', 'DefaultChoiceForm',
-    'DefaultFolderChoiceForm', 'IncludeHelpInContents', 'DataLockControlMode', 'FullTextSearch',
+    'DefaultFolderChoiceForm', 'DefaultForm', 'AuxiliaryForm', 'IncludeHelpInContents', 'DataLockControlMode', 'FullTextSearch',
     'ObjectPresentation', 'ExtendedObjectPresentation', 'ListPresentation', 'ExtendedListPresentation',
     'CreateOnInput', 'ChoiceHistoryOnInput', 'DataHistory', 'Numerator', 'NumberType',
     'NumberLength', 'NumberAllowedLength', 'NumberPeriodicity', 'Posting', 'RealTimePosting',
@@ -90,11 +99,13 @@ function extractSimpleProperties(xmlStr, propertiesBlock) {
  * Парсит XML объекта метаданных (справочник, документ и т.д.)
  */
 async function parseMetadataObjectXml(xmlPath) {
+  await checkFileSize(xmlPath);
   const xmlStr = await fs.readFile(xmlPath, 'utf8');
   const result = { type: null, objectName: '', tabs: [], attributes: [], rawXml: xmlStr };
 
   const catalogMatch = xmlStr.match(/<Catalog[^>]*>([\s\S]*?)<\/Catalog>/i);
   const documentMatch = xmlStr.match(/<Document[^>]*>([\s\S]*?)<\/Document>/i);
+  const dataProcessorMatch = xmlStr.match(/<DataProcessor[^>]*>([\s\S]*?)<\/DataProcessor>/i);
   const formMatch = xmlStr.match(/<Form[^>]*uuid[^>]*>([\s\S]*?)<\/Form>/i);
 
   let content = '';
@@ -104,6 +115,9 @@ async function parseMetadataObjectXml(xmlPath) {
   } else if (documentMatch) {
     result.type = 'Document';
     content = documentMatch[1];
+  } else if (dataProcessorMatch) {
+    result.type = 'DataProcessor';
+    content = dataProcessorMatch[1];
   } else if (formMatch) {
     result.type = 'Form';
     content = formMatch[1];
@@ -198,6 +212,28 @@ async function parseMetadataObjectXml(xmlPath) {
       { id: 'commands', title: 'Команды', fields: [] },
       { id: 'templates', title: 'Макеты', fields: [] },
       { id: 'createOnInput', title: 'Ввод на основании', fields: [] },
+      { id: 'rights', title: 'Права', fields: [] },
+      { id: 'dataExchange', title: 'Обмен данными', fields: [] },
+      { id: 'other', title: 'Прочее', fields: [] }
+    ];
+  } else if (result.type === 'DataProcessor') {
+    result.tabs = [
+      { id: 'main', title: 'Основные', fields: [
+        { key: 'Name', label: 'Имя', value: simpleProps.Name || '', type: 'string' },
+        { key: 'Synonym', label: 'Синоним', value: synonym || '', type: 'string' },
+        { key: 'Comment', label: 'Комментарий', value: simpleProps.Comment || '', type: 'string' }
+      ]},
+      { id: 'subsystems', title: 'Подсистемы', fields: [] },
+      { id: 'functionalOptions', title: 'Функциональные опции', fields: [] },
+      { id: 'data', title: 'Данные', fields: [] },
+      { id: 'forms', title: 'Формы', fields: [
+        { key: 'UseStandardCommands', label: 'Использовать стандартные команды', value: simpleProps.UseStandardCommands || 'false', type: 'boolean' },
+        { key: 'DefaultForm', label: 'Основная форма', value: simpleProps.DefaultForm || '', type: 'string' },
+        { key: 'AuxiliaryForm', label: 'Вспомогательная форма', value: simpleProps.AuxiliaryForm || '', type: 'string' },
+        { key: 'IncludeHelpInContents', label: 'Включать в содержание справки', value: simpleProps.IncludeHelpInContents || 'false', type: 'boolean' }
+      ]},
+      { id: 'commands', title: 'Команды', fields: [] },
+      { id: 'templates', title: 'Макеты', fields: [] },
       { id: 'rights', title: 'Права', fields: [] },
       { id: 'dataExchange', title: 'Обмен данными', fields: [] },
       { id: 'other', title: 'Прочее', fields: [] }
@@ -357,6 +393,7 @@ async function saveMetadataObjectXml(xmlPath, changes, parsed) {
  * Парсит форму из Form.xml
  */
 async function parseFormXml(formXmlPath) {
+  await checkFileSize(formXmlPath);
   const xmlStr = await fs.readFile(formXmlPath, 'utf8');
   const result = { items: [], attributes: [], commands: [] };
 
@@ -462,6 +499,7 @@ async function parseFormXml(formXmlPath) {
  * Парсит XML объекта метаданных для отображения в дереве (реквизиты, табличные части, команды)
  */
 async function parseMetadataForTree(xmlPath) {
+  await checkFileSize(xmlPath);
   const xmlStr = await fs.readFile(xmlPath, 'utf8');
   const result = { attributes: [], tabularSections: [], commands: [], forms: [], templates: [] };
 
@@ -539,6 +577,7 @@ async function parseMetadataForTree(xmlPath) {
  * Парсит XML регистра (накопления/сведений) для дерева
  */
 async function parseRegisterForTree(xmlPath) {
+  await checkFileSize(xmlPath);
   const xmlStr = await fs.readFile(xmlPath, 'utf8');
   const result = { dimensions: [], resources: [], attributes: [], forms: [], commands: [], templates: [] };
 
@@ -590,6 +629,7 @@ async function parseRegisterForTree(xmlPath) {
  * Парсит XML обработки для дерева
  */
 async function parseDataProcessorForTree(xmlPath) {
+  await checkFileSize(xmlPath);
   const xmlStr = await fs.readFile(xmlPath, 'utf8');
   const result = { attributes: [], tabularSections: [], forms: [], commands: [], templates: [] };
 
@@ -657,6 +697,7 @@ async function parseDataProcessorForTree(xmlPath) {
  * Парсит XML перечисления для дерева
  */
 async function parseEnumForTree(xmlPath) {
+  await checkFileSize(xmlPath);
   const xmlStr = await fs.readFile(xmlPath, 'utf8');
   const result = { values: [], forms: [], commands: [], templates: [] };
 

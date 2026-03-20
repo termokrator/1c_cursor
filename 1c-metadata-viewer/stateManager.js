@@ -19,7 +19,7 @@ async function discoverIndependentChildren(rootPath, fullName) {
 
   let meta = { forms: [], templates: [], commands: [] };
   try {
-    if (folder === 'Catalogs' || folder === 'Documents' || folder === 'DocumentJournals') {
+    if (folder === 'Catalogs' || folder === 'Documents') {
       meta = await parseMetadataForTree(xmlPath);
     } else if (folder === 'Enums') {
       meta = await parseEnumForTree(xmlPath);
@@ -106,20 +106,6 @@ class StorageStateManager {
           }
         }
       }
-      // Миграция: для рекурсивно захваченных объектов добавляем недостающие формы, макеты и команды
-      let migrated = false;
-      for (const [fullName, capture] of Object.entries(this.capturedObjects)) {
-        if (capture.recursive && fullName.split('.').length === 2) {
-          const children = await discoverIndependentChildren(this.rootPath, fullName);
-          for (const child of children) {
-            if (!this.capturedObjects[child.fullName]) {
-              this.capturedObjects[child.fullName] = { recursive: false };
-              migrated = true;
-            }
-          }
-        }
-      }
-      if (migrated) await this.save();
     } catch (e) {
       this.capturedObjects = {};
     }
@@ -184,22 +170,9 @@ class StorageStateManager {
         continue;
       }
       const existing = this.capturedObjects[obj.fullName];
-      const recursive = !!obj.recursive;
-      if (!existing || existing.recursive !== recursive) {
-        this.capturedObjects[obj.fullName] = { recursive };
+      if (!existing || existing.recursive !== obj.recursive) {
+        this.capturedObjects[obj.fullName] = { recursive: !!obj.recursive };
         changed = true;
-      }
-      // При рекурсивном захвате добавляем дочерние объекты только для верхнеуровневых объектов
-      // (Справочник.БлокиПитания). Для формы/макета/команды recursive не имеет смысла — у них нет «детей»
-      const parts = obj.fullName.split('.');
-      if (recursive && this.rootPath && parts.length === 2) {
-        const children = await discoverIndependentChildren(this.rootPath, obj.fullName);
-        for (const child of children) {
-          if (!this.capturedObjects[child.fullName]) {
-            this.capturedObjects[child.fullName] = { recursive: false };
-            changed = true;
-          }
-        }
       }
     }
     if (changed) {
